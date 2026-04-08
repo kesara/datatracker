@@ -415,6 +415,71 @@ def get_std_text_index_entries():
     return entries
 
 
+def get_fyi_text_index_entries():
+    """Returns FYI entries for fyi-index.txt"""
+    entries = []
+
+    highest_fyi_number = (
+        Document.objects.filter(type_id="fyi")
+        .annotate(
+            number=Cast(
+                Substr("name", 4, None),
+                output_field=models.IntegerField(),
+            )
+        )
+        .order_by("-number")
+        .first()
+        .number
+    )
+
+    for fyi_number in range(1, highest_fyi_number + 1):
+        fyi_name = f"FYI{fyi_number}"
+        fyi = Document.objects.filter(type_id="fyi", name=f"{fyi_name.lower()}").first()
+
+        if fyi and fyi.contains():
+            entry = subseries_text_line(
+                (
+                    f"[{fyi_name}]"
+                    f"{' ' * (SS_TXT_CUE_COL_WIDTH - len(fyi_name) - 2 - SS_TXT_MARGIN)}"
+                    f"For Your Information {fyi_number},"
+                ),
+                first=True,
+            )
+            entry += "\n"
+            entry += subseries_text_line(
+                f"<{settings.RFC_EDITOR_INFO_BASE_URL}{fyi_name.lower()}>."
+            )
+            entry += "\n"
+            entry += subseries_text_line(
+                "At the time of writing, this FYI comprises the following:"
+            )
+            entry += "\n\n"
+            rfcs = sorted(fyi.contains(), key=lambda x: x.rfc_number)
+            for rfc in rfcs:
+                authors = ", ".join(
+                    author.format_for_titlepage() for author in rfc.rfcauthor_set.all()
+                )
+                entry += subseries_text_line(
+                    (
+                        f'{authors}, "{rfc.title}", FYI¶{fyi_number}, RFC¶{rfc.rfc_number}, '
+                        f"DOI¶{rfc.doi}, {rfc.pub_date().strftime('%B %Y')}, "
+                        f"<{settings.RFC_EDITOR_INFO_BASE_URL}rfc{rfc.rfc_number}>."
+                    )
+                ).replace("¶", " ")
+                entry += "\n\n"
+        else:
+            entry = subseries_text_line(
+                (
+                    f"[{fyi_name}]"
+                    f"{' ' * (SS_TXT_CUE_COL_WIDTH - len(fyi_name) - 2 - SS_TXT_MARGIN)}"
+                    f"For Your Information {fyi_number} currently contains no RFCs"
+                ),
+                first=True,
+            )
+        entries.append(entry)
+    return entries
+
+
 def add_subseries_xml_index_entries(rfc_index, ss_type, include_all=False):
     """Add subseries entries for rfc-index.xml"""
     # subseries docs annotated with numeric number
@@ -659,3 +724,18 @@ def create_std_txt_index():
         },
     )
     save_to_red_bucket("std-index.txt", index)
+
+
+def create_fyi_txt_index():
+    """Create text index of FYIs"""
+    DATE_FMT = "%m/%d/%Y"
+    created_on = timezone.now().strftime(DATE_FMT)
+    log("Creating fyi-index.txt")
+    index = render_to_string(
+        "sync/fyi-index.txt",
+        {
+            "created_on": created_on,
+            "fyis": get_fyi_text_index_entries(),
+        },
+    )
+    save_to_red_bucket("fyi-index.txt", index)

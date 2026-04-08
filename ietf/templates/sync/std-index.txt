@@ -13,7 +13,7 @@ composed of one or more RFCs with Internet Standard status.
 
 STD citations appear in this format:
 
-   [STD#]     Best Current Practice #,
+   [STD#]     Internet Standard #,
               <STD URL>.
               At the time of writing, this STD comprises the following:
 

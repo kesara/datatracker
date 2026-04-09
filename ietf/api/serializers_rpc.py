@@ -1,4 +1,4 @@
-# Copyright The IETF Trust 2025, All Rights Reserved
+# Copyright The IETF Trust 2025-2026, All Rights Reserved
 import datetime
 from pathlib import Path
 from typing import Literal, Optional
@@ -20,13 +20,14 @@ from ietf.doc.models import (
     RfcAuthor,
 )
 from ietf.doc.serializers import RfcAuthorSerializer
+from ietf.doc.tasks import trigger_red_precomputer_task, update_rfc_searchindex_task
 from ietf.doc.utils import (
     default_consensus,
     prettify_std_name,
     update_action_holders,
     update_rfcauthors,
 )
-from ietf.group.models import Group
+from ietf.group.models import Group, Role
 from ietf.group.serializers import AreaSerializer
 from ietf.name.models import StreamName, StdLevelName
 from ietf.person.models import Person
@@ -96,6 +97,21 @@ class DraftWithAuthorsSerializer(serializers.ModelSerializer):
         fields = ["draft_name", "authors"]
 
 
+class WgChairSerializer(serializers.Serializer):
+    """Serialize a WG chair's name and email from a Role"""
+
+    name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+
+    @extend_schema_field(serializers.CharField)
+    def get_name(self, role: Role) -> str:
+        return role.person.plain_name()
+
+    @extend_schema_field(serializers.EmailField)
+    def get_email(self, role: Role) -> str:
+        return role.email.email_address()
+
+
 class DocumentAuthorSerializer(serializers.ModelSerializer):
     """Serializer for a Person in a response"""
 
@@ -103,7 +119,7 @@ class DocumentAuthorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DocumentAuthor
-        fields = ["person", "plain_name"]
+        fields = ["person", "plain_name", "affiliation"]
 
     def get_plain_name(self, document_author: DocumentAuthor) -> str:
         return document_author.person.plain_name()
@@ -125,6 +141,7 @@ class FullDraftSerializer(serializers.ModelSerializer):
         source="shepherd.person", read_only=True
     )
     consensus = serializers.SerializerMethodField()
+    wg_chairs = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
@@ -144,10 +161,20 @@ class FullDraftSerializer(serializers.ModelSerializer):
             "consensus",
             "shepherd",
             "ad",
+            "wg_chairs",
         ]
 
     def get_consensus(self, doc: Document) -> Optional[bool]:
         return default_consensus(doc)
+
+    @extend_schema_field(WgChairSerializer(many=True))
+    def get_wg_chairs(self, doc: Document):
+        if doc.group is None:
+            return []
+        chairs = doc.group.role_set.filter(name_id="chair").select_related(
+            "person", "email"
+        )
+        return WgChairSerializer(chairs, many=True).data
 
     def get_source_format(
         self, doc: Document
@@ -300,6 +327,7 @@ class RfcPubSerializer(serializers.ModelSerializer):
             "obsoletes",
             "updates",
             "subseries",
+            "keywords",
         ]
 
     def validate(self, data):
@@ -540,6 +568,7 @@ class EditableRfcSerializer(serializers.ModelSerializer):
             "pages",
             "std_level",
             "subseries",
+            "keywords",
         ]
 
     def create(self, validated_data):
@@ -680,6 +709,19 @@ class EditableRfcSerializer(serializers.ModelSerializer):
                 stale_subseries_relations.delete()
             if len(rfc_events) > 0:
                 rfc.save_with_history(rfc_events)
+        # Gather obs and updates in both directions as a title/author change to
+        # this doc affects the info rendering of all of the other RFCs
+        needs_updating = sorted(
+            [
+                d.rfc_number
+                for d in [rfc]
+                + rfc.related_that_doc(("obs", "updates"))
+                + rfc.related_that(("obs", "updates"))
+            ]
+        )
+        trigger_red_precomputer_task.delay(rfc_number_list=needs_updating)
+        # Update the search index also
+        update_rfc_searchindex_task.delay(rfc.rfc_number)
         return rfc
 
 

@@ -1,4 +1,4 @@
-# Copyright The IETF Trust 2007-2024, All Rights Reserved
+# Copyright The IETF Trust 2007-2026, All Rights Reserved
 # -*- coding: utf-8 -*-
 
 from base64 import b64decode
@@ -18,7 +18,7 @@ import botocore.config
 
 
 def _multiline_to_list(s):
-    """Helper to split at newlines and conver to list"""
+    """Helper to split at newlines and convert to list"""
     return [item.strip() for item in s.split("\n")]
 
 
@@ -79,6 +79,22 @@ if _API_PRIVATE_KEY_PEM_B64 is not None:
     API_PRIVATE_KEY_PEM = b64decode(_API_PRIVATE_KEY_PEM_B64)
 else:
     raise RuntimeError("DATATRACKER_API_PRIVATE_KEY_PEM_B64 must be set")
+
+_RED_PRECOMPUTER_TRIGGER_RETRY_DELAY = os.environ.get(
+    "DATATRACKER_RED_PRECOMPUTER_TRIGGER_RETRY_DELAY", None
+)
+if _RED_PRECOMPUTER_TRIGGER_RETRY_DELAY is not None:
+    RED_PRECOMPUTER_TRIGGER_RETRY_DELAY = _RED_PRECOMPUTER_TRIGGER_RETRY_DELAY
+_RED_PRECOMPUTER_TRIGGER_MAX_RETRIES = os.environ.get(
+    "DATATRACKER_RED_PRECOMPUTER_TRIGGER_MAX_RETRIES", None
+)
+if _RED_PRECOMPUTER_TRIGGER_MAX_RETRIES is not None:
+    RED_PRECOMPUTER_TRIGGER_MAX_RETRIES = _RED_PRECOMPUTER_TRIGGER_MAX_RETRIES
+_TRIGGER_RED_PRECOMPUTE_MULTIPLE_URL = os.environ.get(
+    "DATATRACKER_TRIGGER_RED_PRECOMPUTE_MULTIPLE_URL", None
+)
+if _TRIGGER_RED_PRECOMPUTE_MULTIPLE_URL is not None:
+    TRIGGER_RED_PRECOMPUTE_MULTIPLE_URL = _TRIGGER_RED_PRECOMPUTE_MULTIPLE_URL
 
 # Set DEBUG if DATATRACKER_DEBUG env var is the word "true"
 DEBUG = os.environ.get("DATATRACKER_DEBUG", "false").lower() == "true"
@@ -377,6 +393,7 @@ if None in (_blob_store_endpoint_url, _blob_store_access_key, _blob_store_secret
         "and DATATRACKER_BLOB_STORE_SECRET_KEY must be set"
     )
 _blob_store_bucket_prefix = os.environ.get("DATATRACKER_BLOB_STORE_BUCKET_PREFIX", "")
+_blob_store_bucket_suffix = os.environ.get("DATATRACKER_BLOB_STORE_BUCKET_SUFFIX", "")
 _blob_store_enable_profiling = (
     os.environ.get("DATATRACKER_BLOB_STORE_ENABLE_PROFILING", "false").lower() == "true"
 )
@@ -396,6 +413,9 @@ for storagename in ARTIFACT_STORAGE_NAMES:
     if storagename in ["staging"]:
         continue
     replica_storagename = f"r2-{storagename}"
+    adjusted_bucket_name = (
+        _blob_store_bucket_prefix + storagename + _blob_store_bucket_suffix
+    ).strip()
     STORAGES[replica_storagename] = {
         "BACKEND": "ietf.doc.storage.MetadataS3Storage",
         "OPTIONS": dict(
@@ -412,10 +432,39 @@ for storagename in ARTIFACT_STORAGE_NAMES:
                 retries={"total_max_attempts": _blob_store_max_attempts},
             ),
             verify=False,
-            bucket_name=f"{_blob_store_bucket_prefix}{storagename}".strip(),
+            bucket_name=adjusted_bucket_name,
             ietf_log_blob_timing=_blob_store_enable_profiling,
         ),
     }
+
+# Configure storage for the red bucket - assume it uses the same credentials as
+# other blobs
+_red_bucket_name = os.environ.get("DATATRACKER_BLOB_STORE_RED_BUCKET_NAME", "").strip()
+if _red_bucket_name == "":
+    raise RuntimeError("DATATRACKER_BLOB_STORE_RED_BUCKET_NAME must be set")
+
+STORAGES["red_bucket"] = {
+    "BACKEND": "storages.backends.s3.S3Storage",
+    "OPTIONS": dict(
+        endpoint_url=_blob_store_endpoint_url,
+        access_key=_blob_store_access_key,
+        secret_key=_blob_store_secret_key,
+        security_token=None,
+        client_config=botocore.config.Config(
+            request_checksum_calculation="when_required",
+            response_checksum_validation="when_required",
+            signature_version="s3v4",
+            connect_timeout=_blob_store_connect_timeout,
+            read_timeout=_blob_store_read_timeout,
+            retries={"total_max_attempts": _blob_store_max_attempts},
+        ),
+        verify=False,
+        bucket_name=_red_bucket_name,
+    ),
+}
+RFCINDEX_DELETE_THEN_WRITE = False  # S3Storage allows file_overwrite by default
+RFCINDEX_OUTPUT_PATH = os.environ.get("DATATRACKER_RFCINDEX_OUTPUT_PATH", "other/")
+RFCINDEX_INPUT_PATH = os.environ.get("DATATRACKER_RFCINDEX_INPUT_PATH", "")
 
 # Configure the blobdb app for artifact storage
 _blobdb_replication_enabled = (
@@ -438,3 +487,13 @@ BLOBDB_REPLICATION = {
 PASSWORD_POLICY_ENFORCE_AT_LOGIN = (
     os.environ.get("DATATRACKER_ENFORCE_PW_POLICY", "true").lower() != "false"
 )
+
+# Typesense search indexing
+SEARCHINDEX_CONFIG = {
+    "TYPESENSE_API_URL": os.environ.get("DATATRACKER_TYPESENSE_API_URL", ""),
+    "TYPESENSE_API_KEY": os.environ.get("DATATRACKER_TYPESENSE_API_KEY", ""),
+    "TASK_RETRY_DELAY": os.environ.get("DATATRACKER_SEARCHINDEX_TASK_RETRY_DELAY", 10),
+    "TASK_MAX_RETRIES": os.environ.get(
+        "DATATRACKER_SEARCHINDEX_TASK_MAX_RETRIES", "12"
+    ),
+}

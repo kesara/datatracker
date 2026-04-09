@@ -13,6 +13,7 @@ import rfc2html
 from io import BufferedReader
 from pathlib import Path
 
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from lxml import etree
 from typing import Optional, Protocol, TYPE_CHECKING, Union
@@ -109,6 +110,15 @@ IESG_CHARTER_ACTIVE_STATES = ("intrev", "extrev", "iesgrev")
 IESG_STATCHG_CONFLREV_ACTIVE_STATES = ("iesgeval", "defer")
 IESG_SUBSTATE_TAGS = ('ad-f-up', 'need-rev', 'extpty')
 
+
+def validate_doc_keywords(value):
+    if (
+        not isinstance(value, list | tuple | set) 
+        or not all(isinstance(elt, str) for elt in value)
+    ):
+        raise ValidationError("Value must be an array of strings")
+
+
 class DocumentInfo(models.Model):
     """Any kind of document.  Draft, RFC, Charter, IPR Statement, Liaison Statement"""
     time = models.DateTimeField(default=timezone.now) # should probably have auto_now=True
@@ -142,6 +152,17 @@ class DocumentInfo(models.Model):
     uploaded_filename = models.TextField(blank=True)
     note = models.TextField(blank=True)
     rfc_number = models.PositiveIntegerField(blank=True, null=True)  # only valid for type="rfc"
+    keywords = models.JSONField(
+        default=list,
+        max_length=1000,
+        validators=[validate_doc_keywords],
+    )
+
+    @property
+    def doi(self) -> str | None:
+        if self.type_id == "rfc" and self.rfc_number is not None:
+            return f"{settings.IETF_DOI_PREFIX}/RFC{self.rfc_number:04d}"
+        return None
 
     def file_extension(self):
         if not hasattr(self, '_cached_extension'):
@@ -466,11 +487,12 @@ class DocumentInfo(models.Model):
 
     def author_list(self):
         """List of author emails"""
-        author_qs = (
-            self.rfcauthor_set
-            if self.type_id == "rfc" and self.rfcauthor_set.exists()
-            else self.documentauthor_set
-        ).select_related("email").order_by("order")
+        if self.type_id == "rfc" and self.rfcauthor_set.exists():
+            author_qs = self.rfcauthor_set.select_related("person").order_by("order")
+        else:
+            author_qs = self.documentauthor_set.select_related("email").order_by(
+                "order"
+            )
         best_addresses = []
         for author in author_qs:
             if author.email:
@@ -953,6 +975,11 @@ class RfcAuthor(models.Model):
     @property
     def email(self) -> Email | None:
         return self.person.email() if self.person else None
+    
+    def format_for_titlepage(self):
+        if self.is_editor:
+            return f"{self.titlepage_name}, Ed."
+        return self.titlepage_name
 
 
 class DocumentAuthorInfo(models.Model):
@@ -1258,11 +1285,8 @@ class Document(StorableMixin, DocumentInfo):
         s = s.first()
         return s
 
-    def pub_date(self):
-        """Get the publication date for this document
-
-        This is the rfc publication date for RFCs, and the new-revision date for other documents.
-        """
+    def pub_datetime(self):
+        """Get the publication datetime of this document"""
         if self.type_id == "rfc":
             # As of Sept 2022, in ietf.sync.rfceditor.update_docs_from_rfc_index() `published_rfc` events are
             # created with a timestamp whose date *in the PST8PDT timezone* is the official publication date
@@ -1270,7 +1294,15 @@ class Document(StorableMixin, DocumentInfo):
             event = self.latest_event(type='published_rfc')
         else:
             event = self.latest_event(type='new_revision')
-        return event.time.astimezone(RPC_TZINFO).date() if event else None
+        return event.time.astimezone(RPC_TZINFO) if event else None
+
+    def pub_date(self):
+        """Get the publication date for this document
+
+        This is the rfc publication date for RFCs, and the new-revision date for other documents.
+        """
+        pub_datetime = self.pub_datetime()
+        return None if pub_datetime is None else pub_datetime.date()
 
     def is_dochistory(self):
         return False

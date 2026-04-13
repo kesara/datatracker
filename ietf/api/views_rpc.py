@@ -47,7 +47,7 @@ from ietf.doc.tasks import (
     update_rfc_searchindex_task,
 )
 from ietf.person.models import Email, Person
-from ietf.sync.tasks import create_rfc_index_task
+from ietf.sync.tasks import create_bcp_index_task, create_rfc_index_task, create_std_index_task
 
 
 class Conflict(APIException):
@@ -549,4 +549,34 @@ class RfcIndexView(APIView):
     )
     def post(self, request):
         create_rfc_index_task.delay()
+        return Response(status=202)
+
+
+class BcpIndexView(APIView):
+    api_key_endpoint = "ietf.api.views_rpc"
+
+    @extend_schema(
+        operation_id="refresh_bcp_index",
+        summary="Refresh bcp-index file",
+        description="Requests creation of bcp-index.txt file",
+        responses={202: None},
+        request=None,
+    )
+    def post(self, request):
+        create_bcp_index_task.delay()
+        return Response(status=202)
+
+
+class StdIndexView(APIView):
+    api_key_endpoint = "ietf.api.views_rpc"
+
+    @extend_schema(
+        operation_id="refresh_std_index",
+        summary="Refresh std-index file",
+        description="Requests creation of std-index.txt file",
+        responses={202: None},
+        request=None,
+    )
+    def post(self, request):
+        create_std_index_task.delay()
         return Response(status=202)

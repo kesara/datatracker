@@ -17,8 +17,11 @@ from ietf.doc.models import DocEvent, RelatedDocument
 from ietf.doc.tasks import rebuild_reference_relations_task
 from ietf.sync import iana
 from ietf.sync import rfceditor
-from ietf.sync.errata import errata_are_dirty, mark_errata_as_processed, get_errata_data, \
-    update_errata_tags
+from ietf.sync.errata import (
+    errata_are_dirty,
+    mark_errata_as_processed,
+    update_errata_from_rfceditor,
+)
 from ietf.sync.rfceditor import MIN_QUEUE_RESULTS, parse_queue, update_drafts_from_queue
 from ietf.sync.rfcindex import (
     create_bcp_txt_index,
@@ -296,8 +299,7 @@ def update_errata_from_rfceditor_task():
         # new_processed_time is the *start* of processing so that any changes after
         # this point will trigger another refresh
         new_processed_time = timezone.now()
-        errata_data = get_errata_data()
-        update_errata_tags(errata_data)
+        update_errata_from_rfceditor()
         mark_errata_as_processed(new_processed_time)
         mark_rfcindex_as_dirty()  # ensure any changes are reflected in the indexes
 

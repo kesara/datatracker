@@ -122,6 +122,11 @@ def update_errata_tags(errata_data):
             )
 
 
+def update_errata_from_rfceditor():
+    errata_data = get_errata_data()
+    update_errata_tags(errata_data)
+
+
 ## DirtyBits management for the errata tags
 
 ERRATA_SLUG = DirtyBits.Slugs.ERRATA
@@ -175,8 +180,3 @@ def errata_are_dirty():
         dirty_work.processed_time is None
         or dirty_work.dirty_time >= dirty_work.processed_time
     )
-
-
-def update_errata_from_rfceditor():
-    errata_data = get_errata_data()
-    update_errata_tags(errata_data)

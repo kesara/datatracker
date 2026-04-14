@@ -109,8 +109,9 @@ def update_errata_tags(errata_data):
                 rfc.tags.remove(tag)
                 change_descs.append(f"removed {tag.slug} tag")
             summary = "Update from RFC Editor: " + ", ".join(change_descs)
-            if all(
-                er["errata_status_code"] == "Rejected" for er in errata_map[rfc.rfc_number]
+            if rfc.rfc_number in errata_map and all(
+                er["errata_status_code"] == "Rejected"
+                for er in errata_map[rfc.rfc_number]
             ):
                 summary += " (all errata rejected)"
             DocEvent.objects.create(

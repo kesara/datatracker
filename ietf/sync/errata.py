@@ -5,10 +5,13 @@ from collections import defaultdict
 from typing import DefaultDict, Literal
 
 from django.core.files.storage import storages
+from django.db.models import Q
 
 from ietf.doc.models import Document, DocEvent
 from ietf.name.models import DocTagName
 from ietf.person.models import Person
+from ietf.utils.log import log
+from ietf.utils.models import DirtyBits
 
 ERRATA_BLOB_NAME = "other/errata.json"  # name of errata.json in the red bucket
 
@@ -106,3 +109,57 @@ def update_errata_tags(errata_data):
             type="sync_from_rfc_editor",
             desc=summary
         )
+
+
+## DirtyBits management for the errata tags
+
+ERRATA_SLUG = DirtyBits.Slugs.ERRATA
+
+
+def update_errata_dirty_time() -> DirtyBits | None:
+    try:
+        last_update = get_errata_last_updated()
+    except Exception as err:
+        log(f"Error in get_errata_last_updated: {err}")
+        return None
+    else:
+        dirty_work, created = DirtyBits.objects.update_or_create(
+            slug=ERRATA_SLUG, defaults={"dirty_time": last_update}
+        )
+        if created:
+            log(f"Created DirtyBits(slug='{ERRATA_SLUG}')")
+        return dirty_work
+
+def mark_errata_as_processed(when: datetime.datetime):
+    n_updated = DirtyBits.objects.filter(
+        Q(processed_time__isnull=True) | Q(processed_time__lt=when),
+        slug=ERRATA_SLUG,
+    ).update(processed_time=when)
+    if n_updated > 0:
+        log(f"processed_time is now {when.isoformat()}")
+    else:
+        log("processed_time not updated, no matching record found")
+
+
+def errata_are_dirty():
+    """Does the rfc index need to be updated?"""
+    dirty_work = update_errata_dirty_time()  # creates DirtyBits if needed
+    if dirty_work is None:
+        # A None indicates we could not check the timestamp of errata.json. In that
+        # case, we are not likely to be able to read the blob either, so don't try
+        # to process it. An error was already logged.
+        return False 
+    display_processed_time = (
+        dirty_work.processed_time.isoformat()
+        if dirty_work.processed_time is not None
+        else "never"
+    )
+    log(
+        f"DirtyBits(slug='{ERRATA_SLUG}'): "
+        f"dirty_time={dirty_work.dirty_time.isoformat()} "
+        f"processed_time={display_processed_time}"
+    )
+    return (
+        dirty_work.processed_time is None
+        or dirty_work.dirty_time >= dirty_work.processed_time
+    )

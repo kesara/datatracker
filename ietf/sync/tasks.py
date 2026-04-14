@@ -26,7 +26,7 @@ from ietf.sync.rfcindex import (
     create_rfc_txt_index,
     create_rfc_xml_index,
     create_std_txt_index,
-    rfcindex_is_dirty, mark_rfcindex_as_processed,
+    rfcindex_is_dirty, mark_rfcindex_as_processed, mark_rfcindex_as_dirty,
 )
 from ietf.sync.utils import build_from_file_content, load_rfcs_into_blobdb, rsync_helper
 from ietf.utils import log
@@ -299,6 +299,7 @@ def update_errata_from_rfceditor_task():
         errata_data = get_errata_data()
         update_errata_tags(errata_data)
         mark_errata_as_processed(new_processed_time)
+        mark_rfcindex_as_dirty()  # ensure any changes are reflected in the indexes
 
 
 @shared_task

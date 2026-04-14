@@ -28,15 +28,29 @@ from ietf.doc.factories import (
     DocEventFactory,
     BcpFactory, WgRfcFactory,
 )
-from ietf.doc.models import Document, DocEvent, DeletedEvent, DocTagName, RelatedDocument, State, StateDocEvent
+from ietf.doc.models import (
+    Document,
+    DocEvent,
+    DeletedEvent,
+    DocTagName,
+    RelatedDocument,
+    State,
+    StateDocEvent,
+)
 from ietf.doc.utils import add_state_change_event
 from ietf.group.factories import GroupFactory
 from ietf.person.factories import PersonFactory
 from ietf.person.models import Person
 from ietf.sync import iana, rfceditor, tasks
-from ietf.sync.errata import update_errata_from_rfceditor, get_errata_last_updated, \
-    get_errata_data, errata_map_from_json, update_errata_dirty_time, \
-    mark_errata_as_processed, update_errata_tags
+from ietf.sync.errata import (
+    update_errata_from_rfceditor,
+    get_errata_last_updated,
+    get_errata_data,
+    errata_map_from_json,
+    update_errata_dirty_time,
+    mark_errata_as_processed,
+    update_errata_tags,
+)
 from ietf.sync.tasks import update_errata_from_rfceditor_task
 from ietf.utils.mail import outbox, empty_outbox
 from ietf.utils.models import DirtyBits

@@ -2,7 +2,7 @@
 import datetime
 import json
 from collections import defaultdict
-from typing import DefaultDict, Literal
+from typing import DefaultDict
 
 from django.conf import settings
 from django.core.files.storage import storages
@@ -18,6 +18,7 @@ from ietf.utils.models import DirtyBits
 
 DEFAULT_ERRATA_JSON_BLOB_NAME = "other/errata.json"
 
+type ErrataJsonEntry = dict[str, str]
 
 def get_errata_last_updated() -> datetime.datetime:
     """Get timestamp of the last errata.json update
@@ -30,7 +31,7 @@ def get_errata_last_updated() -> datetime.datetime:
     )
 
 
-def get_errata_data():
+def get_errata_data() -> list[ErrataJsonEntry]:
     red_bucket = storages["red_bucket"]
     with red_bucket.open(
         getattr(settings, "ERRATA_JSON_BLOB_NAME", DEFAULT_ERRATA_JSON_BLOB_NAME), "r"
@@ -39,7 +40,7 @@ def get_errata_data():
     return errata_data
 
 
-def errata_map_from_json(errata_data):
+def errata_map_from_json(errata_data: list[ErrataJsonEntry]):
     """Create a dict mapping RFC number to a list of applicable errata records"""
     errata = defaultdict(list)
     for item in errata_data:
@@ -50,7 +51,7 @@ def errata_map_from_json(errata_data):
     return dict(errata)
 
 
-def update_errata_tags(errata_data):
+def update_errata_tags(errata_data: list[ErrataJsonEntry]):
     tag_has_errata = DocTagName.objects.get(slug="errata")
     tag_has_verified_errata = DocTagName.objects.get(slug="verified-errata")
     system = Person.objects.get(name="(System)")

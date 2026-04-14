@@ -15,6 +15,7 @@ class DirtyBits(models.Model):
 
     class Slugs(models.TextChoices):
         RFCINDEX = "rfcindex", "RFC Index"
+        ERRATA = "errata", "Errata Tags"
 
     # next line can become `...choices=Slugs)` when we get to Django 5.x
     slug = models.CharField(max_length=40, blank=False, choices=Slugs.choices, unique=True)

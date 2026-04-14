@@ -1,5 +1,4 @@
-# Copyright The IETF Trust 2012-2020, All Rights Reserved
-# -*- coding: utf-8 -*-
+# Copyright The IETF Trust 2012-2026, All Rights Reserved
 
 
 import os
@@ -33,6 +32,7 @@ from ietf.group.factories import GroupFactory
 from ietf.person.factories import PersonFactory
 from ietf.person.models import Person
 from ietf.sync import iana, rfceditor, tasks
+from ietf.sync.tasks import update_errata_from_rfceditor_task
 from ietf.utils.mail import outbox, empty_outbox
 from ietf.utils.test_utils import login_testing_unauthorized
 from ietf.utils.test_utils import TestCase
@@ -1215,3 +1215,28 @@ class TaskTests(TestCase):
         self.assertEqual(mock_kwargs, {})
 
 
+    @mock.patch("ietf.sync.tasks.update_errata_from_rfceditor")
+    @mock.patch("ietf.sync.tasks.mark_rfcindex_as_dirty")
+    @mock.patch("ietf.sync.tasks.mark_errata_as_processed")
+    @mock.patch("ietf.sync.tasks.errata_are_dirty")
+    def test_update_errata_from_rfceditor_task(
+        self,
+        mock_errata_are_dirty,
+        mock_mark_errata_processed,
+        mock_mark_rfcindex_dirty,
+        mock_update,
+    ):
+        mock_errata_are_dirty.return_value = False
+        update_errata_from_rfceditor_task()
+        self.assertTrue(mock_errata_are_dirty.called)
+        self.assertFalse(mock_mark_errata_processed.called)
+        self.assertFalse(mock_mark_rfcindex_dirty.called)
+        self.assertFalse(mock_update.called)
+
+        mock_errata_are_dirty.reset_mock()
+        mock_errata_are_dirty.return_value = True
+        update_errata_from_rfceditor_task()
+        self.assertTrue(mock_errata_are_dirty.called)
+        self.assertTrue(mock_mark_errata_processed.called)
+        self.assertTrue(mock_mark_rfcindex_dirty.called)
+        self.assertTrue(mock_update.called)

@@ -24,6 +24,7 @@ from ietf.sync.rfcindex import (
     create_rfc_txt_index,
     create_rfc_xml_index,
     create_std_txt_index,
+    rfcindex_is_dirty, mark_rfcindex_as_processed,
 )
 from ietf.sync.utils import build_from_file_content, load_rfcs_into_blobdb, rsync_helper
 from ietf.utils import log
@@ -288,33 +289,40 @@ def load_rfcs_into_blobdb_task(start: int, end: int):
 
 
 @shared_task
-def create_rfc_index_task():
-    try:
-        create_rfc_txt_index()
-    except Exception as e:
-        log.log(f"Error: failure in creating rfc-index.txt. {e}")
-        pass
+def refresh_rfc_index_task():
+    if rfcindex_is_dirty():
+        # new_processed_time is the *start* of processing so that any changes after
+        # this point will trigger another refresh
+        new_processed_time = timezone.now()
 
-    try:
-        create_rfc_xml_index()
-    except Exception as e:
-        log.log(f"Error: failure in creating rfc-index.xml. {e}")
-        pass
+        try:
+            create_rfc_txt_index()
+        except Exception as e:
+            log.log(f"Error: failure in creating rfc-index.txt. {e}")
+            pass
 
-    try:
-        create_bcp_txt_index()
-    except Exception as e:
-        log.log(f"Error: failure in creating bcp-index.txt. {e}")
-        pass
+        try:
+            create_rfc_xml_index()
+        except Exception as e:
+            log.log(f"Error: failure in creating rfc-index.xml. {e}")
+            pass
 
-    try:
-        create_std_txt_index()
-    except Exception as e:
-        log.log(f"Error: failure in creating std-index.txt. {e}")
-        pass
+        try:
+            create_bcp_txt_index()
+        except Exception as e:
+            log.log(f"Error: failure in creating bcp-index.txt. {e}")
+            pass
 
-    try:
-        create_fyi_txt_index()
-    except Exception as e:
-        log.log(f"Error: failure in creating fyi-index.txt. {e}")
-        pass
+        try:
+            create_std_txt_index()
+        except Exception as e:
+            log.log(f"Error: failure in creating std-index.txt. {e}")
+            pass
+
+        try:
+            create_fyi_txt_index()
+        except Exception as e:
+            log.log(f"Error: failure in creating fyi-index.txt. {e}")
+            pass
+
+        mark_rfcindex_as_processed(new_processed_time)

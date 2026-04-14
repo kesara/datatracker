@@ -6,6 +6,7 @@ from typing import DefaultDict, Literal
 
 from django.conf import settings
 from django.core.files.storage import storages
+from django.db import transaction
 from django.db.models import Q
 
 from ietf.doc.models import Document, DocEvent
@@ -96,25 +97,29 @@ def update_errata_tags(errata_data):
         changes[rfc]["remove"].append(tag_has_verified_errata)
 
     for rfc, changeset in changes.items():
-        change_descs = []
-        for tag in changeset["add"]:
-            rfc.tags.add(tag)
-            change_descs.append(f"added {tag.slug} tag")
-        for tag in changeset["remove"]:
-            rfc.tags.remove(tag)
-            change_descs.append(f"removed {tag.slug} tag")
-        summary = "Update from RFC Editor: " + ", ".join(change_descs)
-        if all(
-            er["errata_status_code"] == "Rejected" for er in errata_map[rfc.rfc_number]
-        ):
-            summary += " (all errata rejected)"
-        DocEvent.objects.create(
-            doc=rfc,
-            rev=rfc.rev,  # expect no rev
-            by=system,
-            type="sync_from_rfc_editor",
-            desc=summary,
-        )
+        # Update in a transaction per RFC to keep tags and DocEvents consistent.
+        # With this in place, an interrupted task will be cleanly completed on the
+        # next run.
+        with transaction.atomic():
+            change_descs = []
+            for tag in changeset["add"]:
+                rfc.tags.add(tag)
+                change_descs.append(f"added {tag.slug} tag")
+            for tag in changeset["remove"]:
+                rfc.tags.remove(tag)
+                change_descs.append(f"removed {tag.slug} tag")
+            summary = "Update from RFC Editor: " + ", ".join(change_descs)
+            if all(
+                er["errata_status_code"] == "Rejected" for er in errata_map[rfc.rfc_number]
+            ):
+                summary += " (all errata rejected)"
+            DocEvent.objects.create(
+                doc=rfc,
+                rev=rfc.rev,  # expect no rev
+                by=system,
+                type="sync_from_rfc_editor",
+                desc=summary,
+            )
 
 
 ## DirtyBits management for the errata tags

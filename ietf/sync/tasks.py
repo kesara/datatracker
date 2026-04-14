@@ -289,8 +289,32 @@ def load_rfcs_into_blobdb_task(start: int, end: int):
 
 @shared_task
 def create_rfc_index_task():
-    create_rfc_txt_index()
-    create_rfc_xml_index()
-    create_bcp_txt_index()
-    create_std_txt_index()
-    create_fyi_txt_index()
+    try:
+        create_rfc_txt_index()
+    except Exception as e:
+        log.log(f"Error: failure in creating rfc-index.txt. {e}")
+        pass
+
+    try:
+        create_rfc_xml_index()
+    except Exception as e:
+        log.log(f"Error: failure in creating rfc-index.xml. {e}")
+        pass
+
+    try:
+        create_bcp_txt_index()
+    except Exception as e:
+        log.log(f"Error: failure in creating bcp-index.txt. {e}")
+        pass
+
+    try:
+        create_std_txt_index()
+    except Exception as e:
+        log.log(f"Error: failure in creating std-index.txt. {e}")
+        pass
+
+    try:
+        create_fyi_txt_index()
+    except Exception as e:
+        log.log(f"Error: failure in creating fyi-index.txt. {e}")
+        pass

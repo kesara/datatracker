@@ -140,6 +140,19 @@ class RpcApiTests(APITestCase):
         r = self.client.post(url, data=post_data, format="json")
         self.assertEqual(r.status_code, 403)
 
+        # Put a file in the way. Post should fail because files exists
+        with TemporaryDirectory() as rfc_dir:
+            settings.RFC_PATH = rfc_dir  # affects overridden settings
+            rfc_path = Path(rfc_dir)
+            (rfc_path / "prerelease").mkdir()
+            file_in_the_way = rfc_path / f"rfc{unused_rfc_number}.txt"
+            file_in_the_way.touch()
+            r = self.client.post(
+                url, data=post_data, format="json", headers={"X-Api-Key": "valid-token"}
+            )
+            self.assertEqual(r.status_code, 409)  # conflict
+            file_in_the_way.unlink()
+
         r = self.client.post(
             url, data=post_data, format="json", headers={"X-Api-Key": "valid-token"}
         )

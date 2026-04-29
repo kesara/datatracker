@@ -368,46 +368,7 @@ class RfcAuthorViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-class RfcPubNotificationView(APIView):
-    api_key_endpoint = "ietf.api.views_rpc"
-
-    @extend_schema(
-        operation_id="notify_rfc_published",
-        summary="Notify datatracker of RFC publication",
-        request=RfcPubSerializer,
-        responses=NotificationAckSerializer,
-    )
-    def post(self, request):
-        serializer = RfcPubSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        # Create RFC
-        try:
-            rfc = serializer.save()
-        except IntegrityError as err:
-            if Document.objects.filter(
-                rfc_number=serializer.validated_data["rfc_number"]
-            ):
-                raise serializers.ValidationError(
-                    "RFC with that number already exists",
-                    code="rfc-number-in-use",
-                )
-            raise serializers.ValidationError(
-                f"Unable to publish: {err}",
-                code="unknown-integrity-error",
-            )
-        rfc_number_list = [rfc.rfc_number]
-        rfc_number_list.extend(
-            [d.rfc_number for d in rfc.related_that_doc(("updates", "obs"))]
-        )
-        rfc_number_list = sorted(set(rfc_number_list))
-        signal_update_rfc_metadata_task.delay(rfc_number_list=rfc_number_list)
-        return Response(NotificationAckSerializer().data)
-
-
-class RfcPubFilesView(APIView):
-    api_key_endpoint = "ietf.api.views_rpc"
-    parser_classes = [parsers.MultiPartParser]
-
+class EnhancedAPIView(APIView):
     def _fs_destination(self, filename: str | Path) -> Path:
         """Destination for an uploaded RFC file in the filesystem
 
@@ -436,6 +397,71 @@ class RfcPubFilesView(APIView):
                 f"Extension does not begin with '.'!? ({filename})",
             )
         return f"{file_type}/{filename.name}"
+
+
+class RfcPubNotificationView(EnhancedAPIView):
+    api_key_endpoint = "ietf.api.views_rpc"
+
+    @extend_schema(
+        operation_id="notify_rfc_published",
+        summary="Notify datatracker of RFC publication",
+        request=RfcPubSerializer,
+        responses=NotificationAckSerializer,
+    )
+    def post(self, request):
+        serializer = RfcPubSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # Check blobstore
+        rfc_number = serializer.validated_data["rfc_number"]
+        dest_stem = f"rfc{rfc_number}"
+        blob_kind = "rfc"
+        possible_rfc_files = [
+            self._fs_destination(dest_stem + ext)
+            for ext in RfcFileSerializer.allowed_extensions
+        ]
+        possible_rfc_blobs = [
+            self._blob_destination(dest_stem + ext)
+            for ext in RfcFileSerializer.allowed_extensions
+        ]
+        for possible_existing_file in possible_rfc_files:
+            if possible_existing_file.exists():
+                raise Conflict(
+                    "File(s) already exist for this RFC",
+                    code="files-exist",
+                )
+        for possible_existing_blob in possible_rfc_blobs:
+            if exists_in_storage(kind=blob_kind, name=possible_existing_blob):
+                raise Conflict(
+                    "Blob(s) already exist for this RFC",
+                    code="blobs-exist",
+                )
+        # Create RFC
+        try:
+            rfc = serializer.save()
+        except IntegrityError as err:
+            if Document.objects.filter(
+                rfc_number=serializer.validated_data["rfc_number"]
+            ):
+                raise serializers.ValidationError(
+                    "RFC with that number already exists",
+                    code="rfc-number-in-use",
+                )
+            raise serializers.ValidationError(
+                f"Unable to publish: {err}",
+                code="unknown-integrity-error",
+            )
+        rfc_number_list = [rfc.rfc_number]
+        rfc_number_list.extend(
+            [d.rfc_number for d in rfc.related_that_doc(("updates", "obs"))]
+        )
+        rfc_number_list = sorted(set(rfc_number_list))
+        signal_update_rfc_metadata_task.delay(rfc_number_list=rfc_number_list)
+        return Response(NotificationAckSerializer().data)
+
+
+class RfcPubFilesView(EnhancedAPIView):
+    api_key_endpoint = "ietf.api.views_rpc"
+    parser_classes = [parsers.MultiPartParser]
 
     @extend_schema(
         operation_id="upload_rfc_files",

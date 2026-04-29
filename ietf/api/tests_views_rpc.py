@@ -14,7 +14,12 @@ import mock
 from django.utils import timezone
 
 from ietf.blobdb.models import Blob
-from ietf.doc.factories import IndividualDraftFactory, RfcFactory, WgDraftFactory, WgRfcFactory
+from ietf.doc.factories import (
+    IndividualDraftFactory,
+    RfcFactory,
+    WgDraftFactory,
+    WgRfcFactory,
+)
 from ietf.doc.models import RelatedDocument, Document
 from ietf.group.factories import RoleFactory, GroupFactory
 from ietf.person.factories import PersonFactory
@@ -193,9 +198,7 @@ class RpcApiTests(APITestCase):
         mock_args, mock_kwargs = mock_task_delay.call_args
         self.assertIn("rfc_number_list", mock_kwargs)
         expected_rfc_number_list = [rfc.rfc_number]
-        expected_rfc_number_list.extend(
-            [d.rfc_number for d in updates + obsoletes]
-        )
+        expected_rfc_number_list.extend([d.rfc_number for d in updates + obsoletes])
         expected_rfc_number_list = sorted(set(expected_rfc_number_list))
         self.assertEqual(mock_kwargs["rfc_number_list"], expected_rfc_number_list)
 
@@ -263,7 +266,8 @@ class RpcApiTests(APITestCase):
             # empty files
             r = self.client.post(
                 url,
-                _valid_post_data() | {
+                _valid_post_data()
+                | {
                     "contents": [
                         ContentFile(b"", "myfile.xml"),
                         ContentFile(b"", "myfile.txt"),
@@ -282,7 +286,8 @@ class RpcApiTests(APITestCase):
             # bad file type
             r = self.client.post(
                 url,
-                _valid_post_data() | {
+                _valid_post_data()
+                | {
                     "contents": [
                         ContentFile(b"Some content", "myfile.jpg"),
                     ]
@@ -294,7 +299,7 @@ class RpcApiTests(APITestCase):
             self.assertFalse(mock_update_searchindex_task.delay.called)
 
             # Put a file in the way. Post should fail because replace = False
-            file_in_the_way = (rfc_path / f"{rfc.name}.txt")
+            file_in_the_way = rfc_path / f"{rfc.name}.txt"
             file_in_the_way.touch()
             r = self.client.post(
                 url,
@@ -305,7 +310,7 @@ class RpcApiTests(APITestCase):
             self.assertEqual(r.status_code, 409)  # conflict
             self.assertFalse(mock_update_searchindex_task.delay.called)
             file_in_the_way.unlink()
-            
+
             # Put a blob in the way. Post should fail because replace = False
             blob_in_the_way = Blob.objects.create(
                 bucket="rfc", name=f"txt/{rfc.name}.txt", content=b""
@@ -336,8 +341,7 @@ class RpcApiTests(APITestCase):
             for extension in ["xml", "txt", "html", "pdf", "json"]:
                 filename = f"{rfc.name}.{extension}"
                 self.assertEqual(
-                    (rfc_path / filename)
-                    .read_text(),
+                    (rfc_path / filename).read_text(),
                     f"This is .{extension}",
                     f"{extension} file should contain the expected content",
                 )
@@ -353,9 +357,7 @@ class RpcApiTests(APITestCase):
             # special case for notprepped
             notprepped_fn = f"{rfc.name}.notprepped.xml"
             self.assertEqual(
-                (
-                    rfc_path / "prerelease" / notprepped_fn
-                ).read_text(),
+                (rfc_path / "prerelease" / notprepped_fn).read_text(),
                 "This is .notprepped.xml",
                 ".notprepped.xml file should contain the expected content",
             )
@@ -373,9 +375,7 @@ class RpcApiTests(APITestCase):
             _, mock_kwargs = mock_trigger_red_task.delay.call_args
             self.assertIn("rfc_number_list", mock_kwargs)
             expected_rfc_number_list = [rfc.rfc_number]
-            expected_rfc_number_list.extend(
-                [d.rfc_number for d in updates + obsoletes]
-            )
+            expected_rfc_number_list.extend([d.rfc_number for d in updates + obsoletes])
             expected_rfc_number_list = sorted(set(expected_rfc_number_list))
             self.assertEqual(mock_kwargs["rfc_number_list"], expected_rfc_number_list)
             # Confirm that the search index update task was called correctly

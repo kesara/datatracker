@@ -411,7 +411,7 @@ class RfcPubNotificationView(DestinationHelperMixin, APIView):
     def post(self, request):
         serializer = RfcPubSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # Check blobstore
+        # Check blobstore & filesystem for conflicts
         rfc_number = serializer.validated_data["rfc_number"]
         dest_stem = f"rfc{rfc_number}"
         blob_kind = "rfc"

@@ -151,6 +151,16 @@ class RpcApiTests(APITestCase):
         self.assertEqual(r.status_code, 409)  # conflict
         file_in_the_way.unlink()
 
+        # Put a blob in the way. Post should fail because replace = False
+        blob_in_the_way = Blob.objects.create(
+            bucket="rfc", name=f"txt/rfc{unused_rfc_number}.txt", content=b""
+        )
+        r = self.client.post(
+            url, data=post_data, format="json", headers={"X-Api-Key": "valid-token"}
+        )
+        self.assertEqual(r.status_code, 409)  # conflict
+        blob_in_the_way.delete()
+
         r = self.client.post(
             url, data=post_data, format="json", headers={"X-Api-Key": "valid-token"}
         )

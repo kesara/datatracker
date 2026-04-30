@@ -368,8 +368,8 @@ class RfcAuthorViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-class EnhancedAPIView(APIView):
-    def _fs_destination(self, filename: str | Path) -> Path:
+class DestinationHelperMixin:
+    def fs_destination(self, filename: str | Path) -> Path:
         """Destination for an uploaded RFC file in the filesystem
 
         Strips any path components in filename and returns an absolute Path.
@@ -381,7 +381,7 @@ class EnhancedAPIView(APIView):
             return rfc_path / "prerelease" / filename.name
         return rfc_path / filename.name
 
-    def _blob_destination(self, filename: str | Path) -> str:
+    def blob_destination(self, filename: str | Path) -> str:
         """Destination name for an uploaded RFC file in the blob store
 
         Strips any path components in filename and returns an absolute Path.
@@ -399,7 +399,7 @@ class EnhancedAPIView(APIView):
         return f"{file_type}/{filename.name}"
 
 
-class RfcPubNotificationView(EnhancedAPIView):
+class RfcPubNotificationView(DestinationHelperMixin, APIView):
     api_key_endpoint = "ietf.api.views_rpc"
 
     @extend_schema(
@@ -416,11 +416,11 @@ class RfcPubNotificationView(EnhancedAPIView):
         dest_stem = f"rfc{rfc_number}"
         blob_kind = "rfc"
         possible_rfc_files = [
-            self._fs_destination(dest_stem + ext)
+            self.fs_destination(dest_stem + ext)
             for ext in RfcFileSerializer.allowed_extensions
         ]
         possible_rfc_blobs = [
-            self._blob_destination(dest_stem + ext)
+            self.blob_destination(dest_stem + ext)
             for ext in RfcFileSerializer.allowed_extensions
         ]
         for possible_existing_file in possible_rfc_files:
@@ -459,7 +459,7 @@ class RfcPubNotificationView(EnhancedAPIView):
         return Response(NotificationAckSerializer().data)
 
 
-class RfcPubFilesView(EnhancedAPIView):
+class RfcPubFilesView(DestinationHelperMixin, APIView):
     api_key_endpoint = "ietf.api.views_rpc"
     parser_classes = [parsers.MultiPartParser]
 
@@ -485,11 +485,11 @@ class RfcPubFilesView(EnhancedAPIView):
 
         # List of files that might exist for an RFC
         possible_rfc_files = [
-            self._fs_destination(dest_stem + ext)
+            self.fs_destination(dest_stem + ext)
             for ext in serializer.allowed_extensions
         ]
         possible_rfc_blobs = [
-            self._blob_destination(dest_stem + ext)
+            self.blob_destination(dest_stem + ext)
             for ext in serializer.allowed_extensions
         ]
         if not replace:
@@ -534,13 +534,13 @@ class RfcPubFilesView(EnhancedAPIView):
                 with ftm.open("rb") as f:
                     store_file(
                         kind=blob_kind,
-                        name=self._blob_destination(ftm),
+                        name=self.blob_destination(ftm),
                         file=f,
                         doc_name=rfc.name,
                         doc_rev=rfc.rev,  # expect blank, but match whatever it is
                         mtime=mtime,
                     )
-                destination = self._fs_destination(ftm)
+                destination = self.fs_destination(ftm)
                 if (
                     settings.SERVER_MODE != "production"
                     and not destination.parent.exists()

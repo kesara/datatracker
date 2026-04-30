@@ -12,6 +12,7 @@ from django.urls import reverse as urlreverse
 import mock
 from django.utils import timezone
 
+from ietf.api.views_rpc import DestinationHelperMixin
 from ietf.blobdb.models import Blob
 from ietf.doc.factories import (
     IndividualDraftFactory,
@@ -438,3 +439,31 @@ class RpcApiTests(APITestCase):
         response = self.client.post(url, headers={"X-Api-Key": "valid-token"})
         self.assertEqual(response.status_code, 202)
         self.assertTrue(rfcindex_is_dirty())
+
+    def test_destination_helper_mixin_fs_destination(self):
+        file_list = [f"rfc31337.{ext}" for ext in ["txt", "xml", "pdf", "html"]]
+        for filename in file_list:
+            self.assertEqual(
+                DestinationHelperMixin().fs_destination(filename),
+                Path(f"{settings.RFC_PATH}") / filename,
+            )
+        # noteprepped xml
+        filename = "rfc31337.notprepped.xml"
+        self.assertEqual(
+            DestinationHelperMixin().fs_destination(filename),
+            Path(f"{settings.RFC_PATH}/prerelease") / filename,
+        )
+
+    def test_destination_helper_mixin_blob_destination(self):
+        file_list = {ext: f"rfc31337.{ext}" for ext in ["txt", "xml", "pdf", "html"]}
+        for file_type, filename in file_list.items():
+            self.assertEqual(
+                DestinationHelperMixin().blob_destination(filename),
+                f"{file_type}/{filename}",
+            )
+        # noteprepped xml
+        filename = "rfc31337.notprepped.xml"
+        self.assertEqual(
+            DestinationHelperMixin().blob_destination(filename),
+            f"notprepped/{filename}",
+        )

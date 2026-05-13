@@ -17,6 +17,7 @@ from ietf.doc.models import DocEvent, RelatedDocument
 from ietf.doc.tasks import rebuild_reference_relations_task
 from ietf.sync import iana
 from ietf.sync import rfceditor
+from ietf.sync.bibxml import recreate_rfc_bibxml
 from ietf.sync.errata import (
     errata_are_dirty,
     mark_errata_as_processed,
@@ -344,3 +345,11 @@ def refresh_rfc_index_task():
             pass
 
         mark_rfcindex_as_processed(new_processed_time)
+
+
+@shared_task
+def recreate_rfc_bibxml_task():
+    try:
+        recreate_rfc_bibxml()
+    except Exception as e:
+        log.log(f"Error: failure running recreate rfc BibXML. {e}")

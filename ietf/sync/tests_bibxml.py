@@ -1,4 +1,5 @@
 # Copyright The IETF Trust 2026, All Rights Reserved
+from unittest.mock import patch
 from xml.etree import ElementTree
 
 from django.conf import settings
@@ -6,7 +7,12 @@ from django.core.files.storage import storages
 from django.test.utils import override_settings
 
 from ietf.doc.factories import PublishedRfcDocEventFactory
-from ietf.sync.bibxml import create_rfc_bibxml, get_rfc_bibxml, save_to_bucket
+from ietf.sync.bibxml import (
+    create_rfc_bibxml,
+    get_rfc_bibxml,
+    recreate_rfc_bibxml,
+    save_to_bucket,
+)
 from ietf.utils.test_utils import TestCase
 
 
@@ -57,3 +63,8 @@ class BibXmlTests(TestCase):
                 f"{settings.RFC_EDITOR_INFO_BASE_URL}rfc{self.rfc.rfc_number}", bibxml
             )
             self.assertIn('<date month="April" year="2021"/>', bibxml)
+
+    @patch("ietf.sync.bibxml.create_rfc_bibxml")
+    def test_recreate_rfc_bibxml(self, mock_create_rfc_bibxml):
+        recreate_rfc_bibxml()
+        mock_create_rfc_bibxml.assert_called_with(self.rfc.rfc_number)

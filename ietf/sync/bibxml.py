@@ -1,5 +1,6 @@
 # Copyright The IETF Trust 2026, All Rights Reserved
 from pathlib import Path
+from urllib.parse import urljoin
 from xml.sax.saxutils import quoteattr as qa
 
 from django.conf import settings
@@ -28,7 +29,7 @@ def get_rfc_bibxml(rfc_number):
     """Return BibXML entry for the given rfc"""
 
     rfc = Document.objects.get(rfc_number=rfc_number)
-    link = f"{settings.RFC_EDITOR_INFO_BASE_URL}rfc{rfc_number}"
+    link = urljoin(settings.RFC_EDITOR_INFO_BASE_URL, f"rfc{rfc_number}")
     date = rfc.pub_date().strftime('<date month="%B" year="%Y"/>')
     authors = ""
 

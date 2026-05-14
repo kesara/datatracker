@@ -349,7 +349,4 @@ def refresh_rfc_index_task():
 
 @shared_task
 def recreate_rfc_bibxml_task():
-    try:
-        recreate_rfc_bibxml()
-    except Exception as e:
-        log.log(f"Error: failure running recreate rfc BibXML. {e}")
+    recreate_rfc_bibxml()

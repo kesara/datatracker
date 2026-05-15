@@ -1571,11 +1571,11 @@ class TaskTests(TestCase):
         self.assertEqual(update_rfc_log_mock.call_count, 2)
         self.assertEqual(
             update_rfc_log_mock.call_args_list[0][0][0],
-            range(100),  # first batch
+            tuple(range(100)),  # first batch
         )
         self.assertEqual(
             update_rfc_log_mock.call_args_list[1][0][0],
-            range(100, 110),  # second batch
+            tuple(range(100, 110)),  # second batch
         )
         # make sure the calls use the same later_than date and that it's the expected one
         published_later_than = set(
